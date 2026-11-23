@@ -1,0 +1,58 @@
+name: Refresh profile dynamics
+
+on:
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/profile-dynamics.yml'
+      - 'scripts/update_public_activity.py'
+      - 'README.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: profile-dynamics
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Check out profile source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test the public-activity generator
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Generate arcade contribution SVGs
+        uses: abozanona/pacman-contribution-graph@main
+        with:
+          github_user_name: aakashghartichhetri
+          games: 'pacman,galaga'
+          hide_month_labels: 'false'
+
+      - name: Generate factual daily public-activity card
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/update_public_activity.py --output dist/public-activity.svg
+
+      - name: Publish widgets to output branch
+        uses: crazy-max/ghaction-github-pages@v3.1.0
+        with:
+          target_branch: output
+          build_dir: dist
+          keep_history: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
